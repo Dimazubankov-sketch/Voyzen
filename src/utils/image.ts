@@ -30,6 +30,15 @@ export function fileToDataUrl(file: File, maxSize = 640, quality = 0.85): Promis
   });
 }
 
+/**
+ * Convert picked image files to downscaled JPEG data URLs. Object URLs (blob:)
+ * die when the tab reloads, so anything persisted to localStorage must be a
+ * data URL to survive — otherwise photos silently vanish on the next visit.
+ */
+export function filesToDataUrls(files: File[], maxSize = 1280, quality = 0.82): Promise<string[]> {
+  return Promise.all(files.map((f) => fileToDataUrl(f, maxSize, quality)));
+}
+
 /** Human-readable file size, e.g. "2.4 MB". */
 export function formatBytes(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;

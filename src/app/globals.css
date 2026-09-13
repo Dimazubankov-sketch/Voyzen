@@ -205,3 +205,13 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .t-like-icon, .t-like-particles i, .t-toggle-thumb { animation: none !important; }
 }
+
+/* User setting: reduce motion — kills animations/transitions app-wide. */
+.reduce-motion *,
+.reduce-motion *::before,
+.reduce-motion *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}

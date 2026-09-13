@@ -27,7 +27,7 @@ import {
 import { Avatar } from "@/components/ui/avatar";
 import { MediaViewer } from "@/components/ui/media-viewer";
 import { useStore } from "@/lib/app-store";
-import { useIsDesktop, useT } from "@/lib/settings-context";
+import { useIsDesktop, useSettings, useT } from "@/lib/settings-context";
 import {
   chatAvatar,
   chatOnline,
@@ -37,7 +37,7 @@ import {
   type ChatMessage,
   type Person,
 } from "@/lib/mock-data";
-import { formatBytes, readVideoDuration } from "@/utils/image";
+import { filesToDataUrls, formatBytes, readVideoDuration } from "@/utils/image";
 import { cx } from "@/utils/cx";
 import { uid } from "@/utils/uid";
 import { NewGroupDialog } from "./new-group-dialog";
@@ -406,16 +406,17 @@ function Conversation({
     requestAnimationFrame(() => fileRef.current?.click());
   };
 
-  const onFiles = (list: FileList | null) => {
+  const onFiles = async (list: FileList | null) => {
     if (!list || list.length === 0) return;
     const files = Array.from(list);
     const images = files.filter((f) => f.type.startsWith("image/"));
     const videos = files.filter((f) => f.type.startsWith("video/"));
     const others = files.filter((f) => !f.type.startsWith("image/") && !f.type.startsWith("video/"));
 
-    // Up to 10 photos per message; extras spill into further messages.
+    // Photos become data URLs so they survive a reload; up to 10 per message,
+    // extras spill into further messages.
     for (let i = 0; i < images.length; i += 10) {
-      const batch = images.slice(i, i + 10).map((f) => URL.createObjectURL(f));
+      const batch = await filesToDataUrls(images.slice(i, i + 10));
       onSend({ images: batch });
     }
     videos.forEach((f) => {
@@ -594,7 +595,7 @@ function Conversation({
 
       {/* Composer / blocked banner / editing banner */}
       <div className="relative shrink-0 border-t border-line bg-surface p-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))]">
-        <input ref={fileRef} type="file" multiple hidden accept={acceptRef.current || undefined} onChange={(e) => onFiles(e.target.files)} />
+        <input ref={fileRef} type="file" multiple hidden accept={acceptRef.current || undefined} onChange={(e) => void onFiles(e.target.files)} />
 
         {blocked ? (
           <p className="py-2 text-center text-sm text-muted">{t("userBlockedBanner")}</p>
@@ -757,6 +758,8 @@ function Composer({
   onRecorded: (result: RecordingResult) => void;
 }) {
   const t = useT();
+  const { toggles } = useSettings();
+  const enterToSend = toggles.enterToSend;
   const barsRef = useRef<(HTMLDivElement | null)[]>([]);
   const { recording, seconds, error, stream, start, stop, cancel, setError } = useMediaRecorder(barsRef);
 
@@ -873,7 +876,7 @@ function Composer({
         value={draft}
         onChange={(e) => onDraft(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === "Enter" && !e.shiftKey) {
+          if (e.key === "Enter" && !e.shiftKey && enterToSend) {
             e.preventDefault();
             onSubmit();
           }

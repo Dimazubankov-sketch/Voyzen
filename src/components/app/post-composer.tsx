@@ -10,9 +10,11 @@ import {
   RiFileGifLine,
   RiImageAddLine,
   RiMapPin2Line,
+  RiMegaphoneLine,
   RiRefreshLine,
 } from "@remixicon/react";
 import { Avatar } from "@/components/ui/avatar";
+import { ToggleVisual } from "@/components/ui/toggle";
 import { useAuth } from "@/lib/auth-context";
 import { useStore } from "@/lib/app-store";
 import { useT } from "@/lib/settings-context";
@@ -21,6 +23,7 @@ import type { Poll, Post } from "@/lib/mock-data";
 import { emailFor } from "@/lib/accounts";
 import { cx } from "@/utils/cx";
 import { uid } from "@/utils/uid";
+import { filesToDataUrls } from "@/utils/image";
 import { PollView } from "./poll-chart";
 
 const LIMIT = 500;
@@ -46,6 +49,7 @@ export function PostComposerDialog({ onClose, repostOf, editing }: { onClose: ()
   const [location, setLocation] = useState("");
   const [poll, setPoll] = useState<Poll | null>(null);
   const [panel, setPanel] = useState<Panel>(null);
+  const [isAd, setIsAd] = useState(false);
 
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -64,18 +68,19 @@ export function PostComposerDialog({ onClose, repostOf, editing }: { onClose: ()
         images: images.length ? images : undefined,
         location: location.trim() || undefined,
         poll: poll ? { ...poll, options: poll.options.filter((o) => o.text.trim()) } : undefined,
+        ad: isAd || undefined,
       });
     }
     onClose();
   };
 
-  const addImages = (list: FileList | null) => {
+  const addImages = async (list: FileList | null) => {
     if (!list) return;
-    const picked = Array.from(list)
+    const files = Array.from(list)
       .filter((f) => f.type.startsWith("image/"))
-      .slice(0, MAX_IMAGES - images.length)
-      .map((f) => URL.createObjectURL(f));
-    setImages((prev) => [...prev, ...picked]);
+      .slice(0, MAX_IMAGES - images.length);
+    const urls = await filesToDataUrls(files);
+    setImages((prev) => [...prev, ...urls]);
     if (fileRef.current) fileRef.current.value = "";
   };
 
@@ -212,8 +217,20 @@ export function PostComposerDialog({ onClose, repostOf, editing }: { onClose: ()
             accept="image/*"
             multiple
             hidden
-            onChange={(e) => addImages(e.target.files)}
+            onChange={(e) => void addImages(e.target.files)}
           />
+          <button
+            onClick={() => setIsAd((v) => !v)}
+            className={cx(
+              "mb-2 flex w-full items-center gap-2 rounded-xl border px-3 py-2 text-left text-sm font-medium transition",
+              isAd ? "border-accent bg-accent-soft text-accent" : "border-line text-muted hover:bg-surface-2",
+            )}
+          >
+            <RiMegaphoneLine className="size-5 shrink-0" />
+            <span className="flex-1">{t("markAsAd")}</span>
+            <ToggleVisual on={isAd} size="sm" />
+          </button>
+
           <div className="flex items-center gap-1">
             <div className="scroll-clean flex min-w-0 flex-1 gap-1 overflow-x-auto">
               <Tool

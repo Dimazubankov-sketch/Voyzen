@@ -10,18 +10,28 @@ import {
   type ReactNode,
 } from "react";
 import { translate, type Lang, type TranslationKey } from "./i18n";
+import { haptic, setHapticsEnabled } from "@/utils/haptics";
 
 interface Toggles {
   push: boolean;
   readReceipts: boolean;
   /** Force the phone layout even on a wide screen. */
   mobileView: boolean;
+  /** Vibrate on taps (Android). */
+  haptics: boolean;
+  /** Turn off animations and transitions. */
+  reduceMotion: boolean;
+  /** Enter sends a message; off = Enter is a newline. */
+  enterToSend: boolean;
 }
 
 const DEFAULT_TOGGLES: Toggles = {
   push: true,
   readReceipts: true,
   mobileView: false,
+  haptics: true,
+  reduceMotion: false,
+  enterToSend: true,
 };
 
 interface SettingsValue {
@@ -64,6 +74,25 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     sync();
     query.addEventListener("change", sync);
     return () => query.removeEventListener("change", sync);
+  }, []);
+
+  // Reflect the reduce-motion toggle on <html> so a CSS rule can kill animations.
+  useEffect(() => {
+    document.documentElement.classList.toggle("reduce-motion", toggles.reduceMotion);
+  }, [toggles.reduceMotion]);
+
+  // Keep the haptics module in step, and fire a tap buzz on any button/link.
+  useEffect(() => {
+    setHapticsEnabled(toggles.haptics);
+  }, [toggles.haptics]);
+
+  useEffect(() => {
+    const onDown = (e: PointerEvent) => {
+      const el = e.target as HTMLElement | null;
+      if (el?.closest("button, a, [role='button'], input[type='checkbox'], label")) haptic(8);
+    };
+    document.addEventListener("pointerdown", onDown, { passive: true });
+    return () => document.removeEventListener("pointerdown", onDown);
   }, []);
 
   const persist = useCallback((next: { lang: Lang; toggles: Toggles }) => {

@@ -29,9 +29,10 @@ import { LikeButton } from "@/components/ui/like-button";
 import { useAuth } from "@/lib/auth-context";
 import { useStore } from "@/lib/app-store";
 import { useProfileNav } from "@/lib/profile-nav";
-import { useT } from "@/lib/settings-context";
+import { useSettings, useT } from "@/lib/settings-context";
 import { PEOPLE, type Post, type PostComment } from "@/lib/mock-data";
-import { formatBytes } from "@/utils/image";
+import { filesToDataUrls, formatBytes } from "@/utils/image";
+import { translateText } from "@/utils/translate";
 import { linkify } from "@/utils/linkify";
 import { emailFor } from "@/lib/accounts";
 import { cx } from "@/utils/cx";
@@ -64,12 +65,32 @@ export function PostCard({ post }: { post: Post }) {
   const { user } = useAuth();
   const { toggleLike, votePoll, hidePost, editPost, deletePost } = useStore();
   const t = useT();
+  const { lang } = useSettings();
   const openPerson = usePersonOpener();
   const [open, setOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [reposting, setReposting] = useState(false);
   const [editing, setEditing] = useState(false);
   const [viewer, setViewer] = useState<number | null>(null);
+  const [translation, setTranslation] = useState<{ text: string; showing: boolean } | null>(null);
+  const [translating, setTranslating] = useState(false);
+
+  const translate = async () => {
+    if (translation) {
+      setTranslation({ ...translation, showing: !translation.showing });
+      return;
+    }
+    if (translating || !post.text) return;
+    setTranslating(true);
+    try {
+      const out = await translateText(post.text, lang);
+      setTranslation({ text: out, showing: true });
+    } catch {
+      setTranslation({ text: t("translationFailed"), showing: true });
+    } finally {
+      setTranslating(false);
+    }
+  };
 
   const isMe = post.mine || post.author.handle === user?.handle;
   const total = countComments(post.comments);
@@ -94,7 +115,14 @@ export function PostCard({ post }: { post: Post }) {
               </>
             )}
           </p>
-          <p className="mt-0.5 text-xs text-muted">{post.time}</p>
+          <p className="mt-0.5 flex items-center gap-1.5 text-xs text-muted">
+            {post.time}
+            {post.ad && (
+              <span className="rounded bg-surface-3 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
+                {t("ad")}
+              </span>
+            )}
+          </p>
         </div>
         <div className="relative">
           <button
@@ -125,7 +153,22 @@ export function PostCard({ post }: { post: Post }) {
 
       {/* Body */}
       {post.text && (
-        <p className="whitespace-pre-wrap px-4 pb-3 text-[15px] leading-relaxed text-ink">{linkify(post.text, false)}</p>
+        <div className="px-4 pb-3">
+          <p className="whitespace-pre-wrap text-[15px] leading-relaxed text-ink">
+            {translation?.showing ? translation.text : linkify(post.text, false)}
+          </p>
+          <button
+            onClick={translate}
+            disabled={translating}
+            className="mt-1 text-sm font-medium text-accent transition hover:underline disabled:opacity-60"
+          >
+            {translating
+              ? t("translating")
+              : translation?.showing
+                ? t("showOriginal")
+                : t("translate")}
+          </button>
+        </div>
       )}
 
       {post.images && post.images.length > 0 && (
@@ -634,19 +677,22 @@ function CommentComposer({
     requestAnimationFrame(() => fileRef.current?.click());
   };
 
-  const onFiles = (list: FileList | null) => {
+  const onFiles = async (list: FileList | null) => {
     if (!list?.length) return;
     const picked = Array.from(list);
     const imgs = picked.filter((f) => f.type.startsWith("image/"));
     const other = picked.find((f) => !f.type.startsWith("image/"));
-    if (imgs.length) setImages((prev) => [...prev, ...imgs.map((f) => URL.createObjectURL(f))]);
+    if (imgs.length) {
+      const urls = await filesToDataUrls(imgs);
+      setImages((prev) => [...prev, ...urls]);
+    }
     if (other) setFile({ name: other.name, size: formatBytes(other.size), url: URL.createObjectURL(other) });
     if (fileRef.current) fileRef.current.value = "";
   };
 
   return (
     <div className="flex flex-col gap-2">
-      <input ref={fileRef} type="file" multiple hidden accept={acceptRef.current || undefined} onChange={(e) => onFiles(e.target.files)} />
+      <input ref={fileRef} type="file" multiple hidden accept={acceptRef.current || undefined} onChange={(e) => void onFiles(e.target.files)} />
 
       {(images.length > 0 || file) && (
         <div className="flex flex-wrap items-center gap-2">

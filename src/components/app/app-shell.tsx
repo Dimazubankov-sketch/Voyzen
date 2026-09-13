@@ -27,10 +27,13 @@ import { Profile } from "./profile";
 import { PersonProfile } from "./person-profile";
 import { History } from "./history";
 import { Settings } from "./settings";
+import { Premium } from "./premium";
+import { Analytics } from "./analytics";
+import { Monetization } from "./monetization";
 import { CallOverlay, MinimizedCall, type CallKind, type CallSession } from "./call";
 
 export type AppTab = "search" | "home" | "chat";
-type Overlay = "profile" | "history" | "settings" | null;
+type Overlay = "profile" | "history" | "settings" | "premium" | "analytics" | "monetization" | null;
 
 const NAV: {
   key: AppTab;
@@ -95,6 +98,9 @@ export function AppShell() {
     onOpenProfile: () => setOverlay("profile"),
     onOpenHistory: () => setOverlay("history"),
     onOpenSettings: () => setOverlay("settings"),
+    onOpenPremium: () => setOverlay("premium"),
+    onOpenAnalytics: () => setOverlay("analytics"),
+    onOpenMonetization: () => setOverlay("monetization"),
     onSignOut: signOut,
     onAddAccount: () => {
       addFromHandle.current = user?.handle;
@@ -207,6 +213,21 @@ export function AppShell() {
           {overlay === "settings" && (
             <div className="absolute inset-0 z-50 bg-surface animate-slide-in-left">
               <Settings onBack={() => setOverlay(null)} />
+            </div>
+          )}
+          {overlay === "premium" && (
+            <div className="absolute inset-0 z-50 bg-surface animate-slide-in-left">
+              <Premium onBack={() => setOverlay(null)} />
+            </div>
+          )}
+          {overlay === "analytics" && (
+            <div className="absolute inset-0 z-50 bg-surface animate-slide-in-left">
+              <Analytics onBack={() => setOverlay(null)} onOpenPremium={() => setOverlay("premium")} />
+            </div>
+          )}
+          {overlay === "monetization" && (
+            <div className="absolute inset-0 z-50 bg-surface animate-slide-in-left">
+              <Monetization onBack={() => setOverlay(null)} onOpenPremium={() => setOverlay("premium")} />
             </div>
           )}
           {person && (

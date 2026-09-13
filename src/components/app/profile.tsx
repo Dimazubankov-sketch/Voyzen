@@ -10,6 +10,7 @@ import {
   RiLink,
   RiMapPin2Line,
   RiShareLine,
+  RiVerifiedBadgeFill,
 } from "@remixicon/react";
 import { Avatar } from "@/components/ui/avatar";
 import { useStore } from "@/lib/app-store";
@@ -29,7 +30,7 @@ type PeopleTab = "following" | "followers";
 
 export function Profile({ user, onBack }: { user: VoyzenUser; onBack: () => void }) {
   const t = useT();
-  const { myPosts, repostedPosts } = useStore();
+  const { myPosts, repostedPosts, isFollowing } = useStore();
   const [tab, setTab] = useState<ContentTab>("posts");
   const [people, setPeople] = useState<PeopleTab | null>(null);
   const [editing, setEditing] = useState(false);
@@ -37,6 +38,16 @@ export function Profile({ user, onBack }: { user: VoyzenUser; onBack: () => void
   const [sharing, setSharing] = useState(false);
 
   const shown = tab === "posts" ? myPosts : repostedPosts;
+
+  // Real follow graph: the "Following" list is who you actually follow, and a
+  // brand-new account (nobody followed, 0 followers) shows empty lists.
+  const followingList = PEOPLE.filter((p) => isFollowing(p.id));
+  const followersList = user.followers > 0 ? PEOPLE : [];
+  const websiteHref = user.website
+    ? /^https?:\/\//i.test(user.website)
+      ? user.website
+      : `https://${user.website}`
+    : undefined;
 
   return (
     <div className="relative h-full">
@@ -93,12 +104,17 @@ export function Profile({ user, onBack }: { user: VoyzenUser; onBack: () => void
 
           {/* Identity */}
           <div className="mt-3">
-            <h1 className="text-xl font-bold text-ink">{user.name}</h1>
+            <div className="flex items-center gap-1.5">
+              <h1 className="text-xl font-bold text-ink">{user.name}</h1>
+              {user.verified && <RiVerifiedBadgeFill className="size-5 text-accent" />}
+            </div>
             <div className="flex items-center gap-2">
               <span className="text-sm text-muted">{emailFor(user.handle)}</span>
-              <span className="rounded-md bg-surface-3 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-muted">
-                Pro
-              </span>
+              {user.premium && (
+                <span className="rounded-md bg-accent-soft px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-accent">
+                  Plus
+                </span>
+              )}
             </div>
           </div>
 
@@ -116,11 +132,16 @@ export function Profile({ user, onBack }: { user: VoyzenUser; onBack: () => void
                   {user.location}
                 </span>
               )}
-              {user.website && (
-                <span className="flex items-center gap-1 text-accent">
+              {websiteHref && (
+                <a
+                  href={websiteHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 text-accent transition hover:underline"
+                >
                   <RiLink className="size-4" />
                   {user.website}
-                </span>
+                </a>
               )}
             </div>
           )}
@@ -131,7 +152,7 @@ export function Profile({ user, onBack }: { user: VoyzenUser; onBack: () => void
               onClick={() => setPeople("following")}
               className="text-sm text-muted transition hover:underline"
             >
-              <span className="font-bold text-ink">{compact(user.following)}</span> {t("following")}
+              <span className="font-bold text-ink">{compact(followingList.length)}</span> {t("following")}
             </button>
             <button
               onClick={() => setPeople("followers")}
@@ -181,7 +202,15 @@ export function Profile({ user, onBack }: { user: VoyzenUser; onBack: () => void
         <RiAddLine className="size-7" />
       </button>
 
-      {people && <PeoplePanel tab={people} onTab={setPeople} onClose={() => setPeople(null)} />}
+      {people && (
+        <PeoplePanel
+          tab={people}
+          following={followingList}
+          followers={followersList}
+          onTab={setPeople}
+          onClose={() => setPeople(null)}
+        />
+      )}
       {editing && <EditProfileDialog user={user} onClose={() => setEditing(false)} />}
       {composing && <PostComposerDialog onClose={() => setComposing(false)} />}
       {sharing && <ShareSheet handle={user.handle} name={user.name} onClose={() => setSharing(false)} />}
@@ -192,16 +221,20 @@ export function Profile({ user, onBack }: { user: VoyzenUser; onBack: () => void
 /** Following / Followers lists, as two tabs over the same panel. */
 function PeoplePanel({
   tab,
+  following,
+  followers,
   onTab,
   onClose,
 }: {
   tab: PeopleTab;
+  following: typeof PEOPLE;
+  followers: typeof PEOPLE;
   onTab: (t: PeopleTab) => void;
   onClose: () => void;
 }) {
   const t = useT();
   const { openPerson } = useProfileNav();
-  const list = tab === "following" ? PEOPLE : [...PEOPLE].reverse();
+  const list = tab === "following" ? following : followers;
 
   return (
     <div className="absolute inset-0 z-50 flex flex-col bg-surface animate-slide-in-left">
@@ -237,22 +270,28 @@ function PeoplePanel({
       </div>
 
       <div className="scroll-clean min-h-0 flex-1 overflow-y-auto">
-        {list.map((p) => (
-          <button
-            key={p.id}
-            onClick={() => openPerson(p)}
-            className="flex w-full items-center gap-3 border-b border-line px-4 py-3 text-left transition hover:bg-surface-2/50"
-          >
-            <Avatar src={p.avatar} name={p.name} size={44} online={p.online} />
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold text-ink">{p.name}</p>
-              <p className="truncate text-xs text-muted">{emailFor(p.handle)}</p>
-            </div>
-            <span className="rounded-full border border-line px-3.5 py-1.5 text-sm font-medium text-ink">
-              {tab === "following" ? t("following") : "Follow"}
-            </span>
-          </button>
-        ))}
+        {list.length === 0 ? (
+          <p className="py-14 text-center text-sm text-faint">
+            {tab === "following" ? t("noFollowing") : t("noFollowers")}
+          </p>
+        ) : (
+          list.map((p) => (
+            <button
+              key={p.id}
+              onClick={() => openPerson(p)}
+              className="flex w-full items-center gap-3 border-b border-line px-4 py-3 text-left transition hover:bg-surface-2/50"
+            >
+              <Avatar src={p.avatar} name={p.name} size={44} online={p.online} />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-ink">{p.name}</p>
+                <p className="truncate text-xs text-muted">{emailFor(p.handle)}</p>
+              </div>
+              <span className="rounded-full border border-line px-3.5 py-1.5 text-sm font-medium text-ink">
+                {tab === "following" ? t("following") : "Follow"}
+              </span>
+            </button>
+          ))
+        )}
       </div>
     </div>
   );

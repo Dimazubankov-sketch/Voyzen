@@ -3,6 +3,7 @@
 import { useState } from "react";
 import {
   RiAddLine,
+  RiBarChart2Line,
   RiBookmarkLine,
   RiChat3Line,
   RiCheckLine,
@@ -11,12 +12,14 @@ import {
   RiExpandUpDownLine,
   RiHome5Line,
   RiLogoutBoxRLine,
+  RiMoneyDollarCircleLine,
   RiMoonLine,
   RiSearchLine,
   RiSettings4Line,
   RiSidebarFoldLine,
   RiSidebarUnfoldLine,
   RiSunLine,
+  RiVipCrown2Fill,
 } from "@remixicon/react";
 import { Avatar } from "@/components/ui/avatar";
 import { ToggleVisual } from "@/components/ui/toggle";
@@ -32,7 +35,7 @@ import type { AppTab } from "./app-shell";
 /** Drawer width in px — shared with the swipe gesture so the drag maps 1:1. */
 export const DRAWER_WIDTH = 320;
 
-type RowKey = AppTab | "history";
+type RowKey = AppTab | "history" | "analytics" | "monetization";
 
 interface Row {
   key: RowKey;
@@ -48,6 +51,9 @@ interface SidebarProps {
   onOpenProfile: () => void;
   onOpenHistory: () => void;
   onOpenSettings: () => void;
+  onOpenPremium: () => void;
+  onOpenAnalytics: () => void;
+  onOpenMonetization: () => void;
   onSignOut: () => void;
   onAddAccount: () => void;
   unread: { chat: number };
@@ -61,6 +67,9 @@ function Panel({
   onOpenProfile,
   onOpenHistory,
   onOpenSettings,
+  onOpenPremium,
+  onOpenAnalytics,
+  onOpenMonetization,
   onSignOut,
   onAddAccount,
   unread,
@@ -84,11 +93,15 @@ function Panel({
     { key: "search", labelKey: "searchTab", icon: RiSearchLine },
     { key: "chat", labelKey: "messages", icon: RiChat3Line, badge: unread.chat },
     { key: "history", labelKey: "history", icon: RiBookmarkLine },
+    { key: "monetization", labelKey: "menuMonetization", icon: RiMoneyDollarCircleLine },
+    { key: "analytics", labelKey: "menuAnalytics", icon: RiBarChart2Line },
   ];
 
   const go = (key: RowKey) => {
     if (key === "history") onOpenHistory();
-    else onNavigate(key);
+    else if (key === "monetization") onOpenMonetization();
+    else if (key === "analytics") onOpenAnalytics();
+    else onNavigate(key as AppTab);
     onClose?.();
   };
 
@@ -270,6 +283,23 @@ function Panel({
               <ToggleVisual on={theme === "dark"} size="sm" />
             </>
           )}
+        </button>
+
+        {/* Voyzen Plus upsell (or badge when subscribed) */}
+        <button
+          onClick={() => {
+            onOpenPremium();
+            onClose?.();
+          }}
+          title={collapsed ? t("menuPremium") : undefined}
+          className={cx(
+            "flex items-center rounded-xl text-left text-sm font-semibold transition",
+            collapsed ? "justify-center p-2.5" : "gap-3 px-3 py-2.5",
+            user.premium ? "bg-accent-soft text-accent" : "text-accent hover:bg-accent-soft",
+          )}
+        >
+          <RiVipCrown2Fill className="size-5 shrink-0" />
+          {!collapsed && <span className="flex-1">{user.premium ? t("plusActive") : t("menuPremium")}</span>}
         </button>
 
         <SecondaryRow icon={RiCustomerServiceLine} label={t("support")} collapsed={collapsed} />

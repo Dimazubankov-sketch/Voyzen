@@ -54,11 +54,6 @@ export function BubbleBody({
   const imagesOnly = hasImages && !message.text && !message.file && !message.audio && !message.video && !message.replyTo;
   const author = isGroup && !mine ? PEOPLE.find((p) => p.id === message.authorId) : undefined;
 
-  // In select mode every photo is shown so each can be ticked; otherwise the
-  // grid caps at four with a "+N" tile that opens the viewer.
-  const shown = selectMode ? images : images.slice(0, 4);
-  const single = images.length === 1;
-
   return (
     <>
       {author && <p className="px-1 pb-0.5 text-xs font-semibold text-accent">{author.name}</p>}
@@ -79,61 +74,71 @@ export function BubbleBody({
         </p>
       )}
 
-      {hasImages && (
-        <div className={cx("grid gap-1", single ? "grid-cols-1" : "grid-cols-2")}>
-          {shown.map((src, i) => {
-            const key = `${message.id}:${i}`;
-            const checked = !!selectedKeys?.has(key);
-            const isLast = !selectMode && i === 3 && images.length > 4;
-            const inner = (
-              <>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={src}
-                  alt=""
-                  draggable={false}
-                  className={cx("w-full rounded-lg object-cover", single ? "h-60" : "h-28")}
-                />
-                {isLast && (
-                  <span className="absolute inset-0 flex items-center justify-center rounded-lg bg-black/45 text-lg font-semibold text-white">
-                    +{images.length - 4}
-                  </span>
-                )}
-                {selectMode && (
-                  <span
-                    className={cx(
-                      "absolute right-1.5 top-1.5 flex size-5 items-center justify-center rounded-full border-2",
-                      checked ? "border-white bg-accent text-white" : "border-white/90 bg-black/30",
-                    )}
-                  >
-                    {checked && <RiCheckLine className="size-3.5" />}
-                  </span>
-                )}
-              </>
-            );
-            if (!onOpenImages && !selectMode) {
-              return (
-                <span key={key} className="relative">
-                  {inner}
-                </span>
+      {hasImages && (() => {
+        const inSelect = !!selectMode;
+        // Select mode shows every photo as a uniform selectable tile; otherwise
+        // the block adapts its shape to the photo count (1 / 2 / 3 / 4+).
+        const display = inSelect ? images : images.slice(0, 4);
+        const containerCols = inSelect ? "grid-cols-3" : display.length === 1 ? "grid-cols-1" : "grid-cols-2";
+        const cellClass = (i: number) => {
+          if (inSelect) return "aspect-square";
+          if (display.length === 1) return "h-60";
+          if (display.length === 2) return "h-44";
+          if (display.length === 3) return i === 0 ? "col-span-2 h-40" : "h-28";
+          return "h-28"; // 4+
+        };
+        return (
+          <div className={cx("grid gap-1", containerCols)}>
+            {display.map((src, i) => {
+              const key = `${message.id}:${i}`;
+              const checked = !!selectedKeys?.has(key);
+              const isLast = !inSelect && i === 3 && images.length > 4;
+              const wrap = cx("relative overflow-hidden rounded-lg", cellClass(i));
+              const inner = (
+                <>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={src} alt="" draggable={false} className="size-full object-cover" />
+                  {isLast && (
+                    <span className="absolute inset-0 flex items-center justify-center bg-black/45 text-xl font-semibold text-white">
+                      +{images.length - 4}
+                    </span>
+                  )}
+                  {inSelect && (
+                    <span
+                      className={cx(
+                        "absolute right-1.5 top-1.5 flex size-5 items-center justify-center rounded-full border-2",
+                        checked ? "border-white bg-accent text-white" : "border-white/90 bg-black/30",
+                      )}
+                    >
+                      {checked && <RiCheckLine className="size-3.5" />}
+                    </span>
+                  )}
+                </>
               );
-            }
-            return (
-              <button
-                key={key}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (selectMode) onToggleKey?.(key);
-                  else onOpenImages?.(images, i);
-                }}
-                className={cx("relative", checked && "opacity-90 ring-2 ring-accent ring-offset-1 ring-offset-surface")}
-              >
-                {inner}
-              </button>
-            );
-          })}
-        </div>
-      )}
+              if (!onOpenImages && !inSelect) {
+                return (
+                  <span key={key} className={wrap}>
+                    {inner}
+                  </span>
+                );
+              }
+              return (
+                <button
+                  key={key}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (inSelect) onToggleKey?.(key);
+                    else onOpenImages?.(images, i);
+                  }}
+                  className={cx(wrap, checked && "opacity-90 ring-2 ring-accent")}
+                >
+                  {inner}
+                </button>
+              );
+            })}
+          </div>
+        );
+      })()}
 
       {message.audio && <VoiceMessage audio={message.audio} mine={mine} />}
       {message.video && <VideoMessage video={message.video} mine={mine} />}

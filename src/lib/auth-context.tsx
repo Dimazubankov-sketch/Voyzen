@@ -23,6 +23,12 @@ export interface VoyzenUser {
   website?: string;
   following: number;
   followers: number;
+  /** Voyzen Plus subscriber. */
+  premium?: boolean;
+  /** Verified badge (comes with Plus). */
+  verified?: boolean;
+  /** Plus plan expiry, epoch ms. */
+  premiumUntil?: number;
 }
 
 interface AuthValue {
@@ -37,6 +43,9 @@ interface AuthValue {
   /** Switch the active account to one already in `accounts`. */
   switchAccount: (handle: string) => void;
   updateUser: (patch: Partial<VoyzenUser>) => void;
+  /** Subscribe to Voyzen Plus (adds the verified badge). */
+  subscribe: (plan: "month" | "year") => void;
+  cancelSubscription: () => void;
 }
 
 const STORAGE_KEY = "voyzen.user";
@@ -184,9 +193,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  const subscribe = useCallback(
+    (plan: "month" | "year") => {
+      const days = plan === "year" ? 365 : 30;
+      updateUser({ premium: true, verified: true, premiumUntil: Date.now() + days * 86_400_000 });
+    },
+    [updateUser],
+  );
+
+  const cancelSubscription = useCallback(() => {
+    updateUser({ premium: false, verified: false, premiumUntil: undefined });
+  }, [updateUser]);
+
   const value = useMemo(
-    () => ({ user, ready, accounts, signIn, signUp, signOut, switchAccount, updateUser }),
-    [user, ready, accounts, signIn, signUp, signOut, switchAccount, updateUser],
+    () => ({ user, ready, accounts, signIn, signUp, signOut, switchAccount, updateUser, subscribe, cancelSubscription }),
+    [user, ready, accounts, signIn, signUp, signOut, switchAccount, updateUser, subscribe, cancelSubscription],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

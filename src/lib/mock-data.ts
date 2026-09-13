@@ -137,6 +137,8 @@ export interface Post {
   hidden?: boolean;
   /** Simple tags for the search screen. */
   tags?: string[];
+  /** Marked as a paid promotion by its author. */
+  ad?: boolean;
 }
 
 /** Hours ago, as an epoch timestamp — demo comments need a real ordering. */

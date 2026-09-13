@@ -31,6 +31,8 @@ export interface NewPostInput {
   location?: string;
   /** Set for a quote-repost. */
   repostOf?: Post;
+  /** Marked as a paid promotion. */
+  ad?: boolean;
 }
 
 /** Per-chat toggles that live outside the message list. */
@@ -295,11 +297,12 @@ function StoreInner({
       name: user?.name ?? "You",
       handle: user?.handle ?? "you",
       avatar: user?.avatar ?? "",
+      verified: user?.verified,
     };
   }, [user]);
 
   const addPost = useCallback(
-    ({ text, images, poll, location, repostOf }: NewPostInput) => {
+    ({ text, images, poll, location, repostOf, ad }: NewPostInput) => {
       if (!user) return;
       const post: Post = {
         id: uid("p"),
@@ -316,6 +319,7 @@ function StoreInner({
         images,
         poll,
         repostOf,
+        ad,
         likes: 0,
         likers: [],
         comments: [],
@@ -511,8 +515,14 @@ function StoreInner({
   }, []);
 
   const togglePinChat = useCallback((chatId: string) => {
-    setChats((prev) => prev.map((c) => (c.id === chatId ? { ...c, pinned: !c.pinned } : c)));
-  }, []);
+    // Plus lifts the pin limit from 5 to 10.
+    const limit = user?.premium ? 10 : 5;
+    setChats((prev) => {
+      const target = prev.find((c) => c.id === chatId);
+      if (target && !target.pinned && prev.filter((c) => c.pinned).length >= limit) return prev;
+      return prev.map((c) => (c.id === chatId ? { ...c, pinned: !c.pinned } : c));
+    });
+  }, [user?.premium]);
 
   const toggleMuteChat = useCallback((chatId: string) => {
     setChats((prev) => prev.map((c) => (c.id === chatId ? { ...c, muted: !c.muted } : c)));

@@ -3,10 +3,13 @@
 import {
   RiArrowLeftLine,
   RiCheckLine,
+  RiCornerDownLeftLine,
+  RiFlashlightLine,
   RiGlobalLine,
   RiMoonLine,
   RiSmartphoneLine,
   RiSunLine,
+  RiPulseLine,
 } from "@remixicon/react";
 import { useAuth } from "@/lib/auth-context";
 import { useSettings } from "@/lib/settings-context";
@@ -81,6 +84,19 @@ export function Settings({ onBack }: { onBack: () => void }) {
               />
             </Row>
           )}
+        </Section>
+
+        {/* Interface */}
+        <Section title={t("interfaceSection")}>
+          <Row label={t("haptics")} icon={<RiPulseLine className="size-5 text-muted" />}>
+            <Toggle on={toggles.haptics} onChange={(v) => setToggle("haptics", v)} label={t("haptics")} />
+          </Row>
+          <Row label={t("reduceMotion")} icon={<RiFlashlightLine className="size-5 text-muted" />}>
+            <Toggle on={toggles.reduceMotion} onChange={(v) => setToggle("reduceMotion", v)} label={t("reduceMotion")} />
+          </Row>
+          <Row label={t("enterToSend")} icon={<RiCornerDownLeftLine className="size-5 text-muted" />}>
+            <Toggle on={toggles.enterToSend} onChange={(v) => setToggle("enterToSend", v)} label={t("enterToSend")} />
+          </Row>
         </Section>
 
         {/* Notifications & privacy */}
