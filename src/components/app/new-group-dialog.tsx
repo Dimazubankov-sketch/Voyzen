@@ -16,18 +16,21 @@ import { cx } from "@/utils/cx";
 export function NewGroupDialog({
   onClose,
   onCreate,
+  initialMembers = [],
 }: {
   onClose: () => void;
   onCreate: (name: string, members: Person[]) => void;
+  initialMembers?: Person[];
 }) {
   const t = useT();
   const [name, setName] = useState("");
   const [query, setQuery] = useState("");
-  const [picked, setPicked] = useState<string[]>([]);
+  const [picked, setPicked] = useState<string[]>(() => initialMembers.map((p) => p.id));
 
   const shown = PEOPLE.filter((p) =>
     p.name.toLowerCase().includes(query.trim().toLowerCase()),
   );
+  const pickedPeople = PEOPLE.filter((p) => picked.includes(p.id));
 
   const toggle = (id: string) =>
     setPicked((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -91,6 +94,28 @@ export function NewGroupDialog({
             <span className="text-sm font-medium text-ink">{t("members")}</span>
             <span className="text-xs text-muted">{picked.length} {t("selected")}</span>
           </div>
+
+          {/* Selected people ride above the search, each poppable off with a tap. */}
+          {pickedPeople.length > 0 && (
+            <div className="scroll-clean mb-3 flex gap-3 overflow-x-auto pb-1">
+              {pickedPeople.map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => toggle(p.id)}
+                  aria-label={`${t("close")} ${p.name}`}
+                  className="flex w-14 shrink-0 flex-col items-center gap-1 animate-pop-in"
+                >
+                  <span className="relative">
+                    <Avatar src={p.avatar} name={p.name} size={48} online={p.online} />
+                    <span className="absolute -right-0.5 -top-0.5 flex size-4 items-center justify-center rounded-full border-2 border-surface bg-danger text-white">
+                      <RiCloseLine className="size-2.5" />
+                    </span>
+                  </span>
+                  <span className="w-full truncate text-center text-[11px] text-muted">{p.name.split(" ")[0]}</span>
+                </button>
+              ))}
+            </div>
+          )}
 
           <div className="mb-3 flex items-center gap-2 rounded-full bg-surface-2 px-3.5 py-2">
             <RiSearchLine className="size-4 shrink-0 text-faint" />

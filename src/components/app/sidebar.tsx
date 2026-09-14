@@ -12,14 +12,14 @@ import {
   RiExpandUpDownLine,
   RiHome5Line,
   RiLogoutBoxRLine,
-  RiMoneyDollarCircleLine,
+  RiHandCoinLine,
   RiMoonLine,
   RiSearchLine,
   RiSettings4Line,
   RiSidebarFoldLine,
   RiSidebarUnfoldLine,
   RiSunLine,
-  RiVipCrown2Fill,
+  RiVipDiamondFill,
 } from "@remixicon/react";
 import { Avatar } from "@/components/ui/avatar";
 import { ToggleVisual } from "@/components/ui/toggle";
@@ -93,7 +93,7 @@ function Panel({
     { key: "search", labelKey: "searchTab", icon: RiSearchLine },
     { key: "chat", labelKey: "messages", icon: RiChat3Line, badge: unread.chat },
     { key: "history", labelKey: "history", icon: RiBookmarkLine },
-    { key: "monetization", labelKey: "menuMonetization", icon: RiMoneyDollarCircleLine },
+    { key: "monetization", labelKey: "menuMonetization", icon: RiHandCoinLine },
     { key: "analytics", labelKey: "menuAnalytics", icon: RiBarChart2Line },
   ];
 
@@ -298,7 +298,7 @@ function Panel({
             user.premium ? "bg-accent-soft text-accent" : "text-accent hover:bg-accent-soft",
           )}
         >
-          <RiVipCrown2Fill className="size-5 shrink-0" />
+          <RiVipDiamondFill className="size-5 shrink-0" />
           {!collapsed && <span className="flex-1">{user.premium ? t("plusActive") : t("menuPremium")}</span>}
         </button>
 

@@ -2,12 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  RiAddCircleFill,
+  RiAddCircleLine,
   RiChat3Fill,
   RiChat3Line,
   RiHome5Fill,
   RiHome5Line,
-  RiSearchFill,
-  RiSearchLine,
 } from "@remixicon/react";
 import { Avatar } from "@/components/ui/avatar";
 import { useAuth } from "@/lib/auth-context";
@@ -20,8 +20,8 @@ import type { TranslationKey } from "@/lib/i18n";
 import { cx } from "@/utils/cx";
 import { AuthScreen } from "@/components/auth/auth-screen";
 import { Feed } from "./feed";
-import { Search } from "./search";
 import { ChatView } from "./chat";
+import { PostComposerDialog } from "./post-composer";
 import { DRAWER_WIDTH, SidebarDrawer, SidebarRail } from "./sidebar";
 import { Profile } from "./profile";
 import { PersonProfile } from "./person-profile";
@@ -36,19 +36,19 @@ export type AppTab = "search" | "home" | "chat";
 type Overlay = "profile" | "history" | "settings" | "premium" | "analytics" | "monetization" | null;
 
 const NAV: {
-  key: AppTab;
+  key: AppTab | "compose";
   labelKey: TranslationKey;
   line: React.ComponentType<{ className?: string }>;
   fill: React.ComponentType<{ className?: string }>;
 }[] = [
   { key: "home", labelKey: "home", line: RiHome5Line, fill: RiHome5Fill },
-  { key: "search", labelKey: "searchTab", line: RiSearchLine, fill: RiSearchFill },
+  { key: "compose", labelKey: "newPost", line: RiAddCircleLine, fill: RiAddCircleFill },
   { key: "chat", labelKey: "messages", line: RiChat3Line, fill: RiChat3Fill },
 ];
 
 export function AppShell() {
   const { user, signOut } = useAuth();
-  const { chats } = useStore();
+  const { chats, openOrCreateDirect } = useStore();
   const t = useT();
   const isDesktop = useIsDesktop();
 
@@ -61,6 +61,19 @@ export function AppShell() {
   const [call, setCall] = useState<CallSession | null>(null);
   const [callMinimized, setCallMinimized] = useState(false);
   const [addingAccount, setAddingAccount] = useState(false);
+  const [composing, setComposing] = useState(false);
+  const [feedSearch, setFeedSearch] = useState(0);
+  const [openChat, setOpenChat] = useState<{ id: string; n: number } | null>(null);
+
+  const messagePerson = useCallback(
+    (p: Person) => {
+      const id = openOrCreateDirect(p);
+      setPerson(null);
+      setTab("chat");
+      setOpenChat((prev) => ({ id, n: (prev?.n ?? 0) + 1 }));
+    },
+    [openOrCreateDirect],
+  );
 
   // Close the "add account" overlay once a different account becomes active.
   const addFromHandle = useRef<string | undefined>(undefined);
@@ -92,8 +105,14 @@ export function AppShell() {
     user,
     tab,
     onNavigate: (next: AppTab) => {
-      setTab(next);
       setOverlay(null);
+      // Search now lives in the feed — the menu's Search opens it there.
+      if (next === "search") {
+        setTab("home");
+        setFeedSearch((n) => n + 1);
+        return;
+      }
+      setTab(next);
     },
     onOpenProfile: () => setOverlay("profile"),
     onOpenHistory: () => setOverlay("history"),
@@ -147,10 +166,14 @@ export function AppShell() {
           )}
 
           <main className={cx("min-h-0 flex-1", tab === "chat" ? "flex flex-col" : "")}>
-            {tab === "home" && <Feed leading={avatarButton} />}
-            {tab === "search" && <Search leading={avatarButton} />}
+            {tab === "home" && <Feed leading={avatarButton} openSearchSignal={feedSearch} />}
             {tab === "chat" && (
-              <ChatView onConversationChange={onConversationChange} onStartCall={startCall} onOpenPerson={openPerson} />
+              <ChatView
+                onConversationChange={onConversationChange}
+                onStartCall={startCall}
+                onOpenPerson={openPerson}
+                openChat={openChat}
+              />
             )}
           </main>
 
@@ -158,13 +181,17 @@ export function AppShell() {
           {!isDesktop && showChrome && (
             <nav className="flex h-16 shrink-0 items-center justify-around border-t border-line bg-surface px-2 pb-[env(safe-area-inset-bottom)]">
               {NAV.map((item) => {
-                const active = tab === item.key;
+                const active = item.key !== "compose" && tab === item.key;
                 const Icon = active ? item.fill : item.line;
                 const badge = item.key === "chat" ? unreadChats : 0;
                 return (
                   <button
                     key={item.key}
                     onClick={() => {
+                      if (item.key === "compose") {
+                        setComposing(true);
+                        return;
+                      }
                       setTab(item.key);
                       setOverlay(null);
                     }}
@@ -232,9 +259,11 @@ export function AppShell() {
           )}
           {person && (
             <div className="absolute inset-0 z-[52] bg-surface animate-slide-in-left">
-              <PersonProfile person={person} onBack={() => setPerson(null)} />
+              <PersonProfile person={person} onBack={() => setPerson(null)} onMessage={messagePerson} />
             </div>
           )}
+
+          {composing && <PostComposerDialog onClose={() => setComposing(false)} />}
 
           {/* Add-account: the auth screen over the app, cancelable via its back arrow */}
           {addingAccount && (

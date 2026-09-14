@@ -1,6 +1,6 @@
 "use client";
 
-import { RiArrowLeftLine, RiBarChart2Line, RiChat1Line, RiEyeLine, RiHeart3Line, RiLockLine, RiRepeat2Line, RiVipCrown2Fill } from "@remixicon/react";
+import { RiArrowLeftLine, RiBarChart2Line, RiChat1Line, RiEyeLine, RiHeart3Line, RiLockLine, RiRepeat2Line, RiVipDiamondFill } from "@remixicon/react";
 import { useAuth } from "@/lib/auth-context";
 import { useStore } from "@/lib/app-store";
 import { useT } from "@/lib/settings-context";
@@ -70,7 +70,7 @@ export function Analytics({ onBack, onOpenPremium }: { onBack: () => void; onOpe
         <div className="relative overflow-hidden rounded-2xl border border-line bg-surface p-4">
           <p className="mb-3 flex items-center gap-2 text-sm font-semibold text-ink">
             {t("topPosts")}
-            {!premium && <RiVipCrown2Fill className="size-4 text-accent" />}
+            {!premium && <RiVipDiamondFill className="size-4 text-accent" />}
           </p>
           <div className={cx("flex flex-col gap-3", !premium && "blur-sm")}>
             {top.length === 0 ? (

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { RiArrowLeftLine, RiMoneyDollarCircleLine, RiVipCrown2Fill } from "@remixicon/react";
+import { RiArrowLeftLine, RiHandCoinLine, RiVipDiamondFill } from "@remixicon/react";
 import { useAuth } from "@/lib/auth-context";
 import { useStore } from "@/lib/app-store";
 import { useT } from "@/lib/settings-context";
@@ -30,7 +30,7 @@ export function Monetization({ onBack, onOpenPremium }: { onBack: () => void; on
           <RiArrowLeftLine className="size-5" />
         </button>
         <h1 className="flex items-center gap-2 text-base font-bold text-ink">
-          <RiMoneyDollarCircleLine className="size-5 text-accent" />
+          <RiHandCoinLine className="size-5 text-accent" />
           {t("monetizationTitle")}
         </h1>
       </header>
@@ -38,7 +38,7 @@ export function Monetization({ onBack, onOpenPremium }: { onBack: () => void; on
       {!premium ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
           <span className="flex size-16 items-center justify-center rounded-full bg-accent-soft text-accent">
-            <RiVipCrown2Fill className="size-8" />
+            <RiVipDiamondFill className="size-8" />
           </span>
           <p className="text-lg font-bold text-ink">{t("monetizationLocked")}</p>
           <p className="max-w-xs text-sm text-muted">{t("monetizationLockedSub")}</p>

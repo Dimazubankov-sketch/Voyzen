@@ -1,10 +1,10 @@
 "use client";
 
+import { useState } from "react";
 import {
+  RiArrowDownSLine,
   RiArrowLeftLine,
   RiCheckLine,
-  RiCornerDownLeftLine,
-  RiFlashlightLine,
   RiGlobalLine,
   RiMoonLine,
   RiSmartphoneLine,
@@ -12,7 +12,7 @@ import {
   RiPulseLine,
 } from "@remixicon/react";
 import { useAuth } from "@/lib/auth-context";
-import { useSettings } from "@/lib/settings-context";
+import { useSettings, type PrivacyLevel } from "@/lib/settings-context";
 import { useTheme } from "@/lib/theme-context";
 import { LANGUAGES } from "@/lib/i18n";
 import { Flag, formatPhone } from "@/components/base/phone-input";
@@ -20,7 +20,7 @@ import { Toggle } from "@/components/ui/toggle";
 import { cx } from "@/utils/cx";
 
 export function Settings({ onBack }: { onBack: () => void }) {
-  const { t, lang, setLang, toggles, setToggle, isWideScreen } = useSettings();
+  const { t, lang, setLang, toggles, setToggle, privacy, setPrivacy, isWideScreen } = useSettings();
   const { theme, toggle } = useTheme();
   const { user } = useAuth();
 
@@ -91,12 +91,6 @@ export function Settings({ onBack }: { onBack: () => void }) {
           <Row label={t("haptics")} icon={<RiPulseLine className="size-5 text-muted" />}>
             <Toggle on={toggles.haptics} onChange={(v) => setToggle("haptics", v)} label={t("haptics")} />
           </Row>
-          <Row label={t("reduceMotion")} icon={<RiFlashlightLine className="size-5 text-muted" />}>
-            <Toggle on={toggles.reduceMotion} onChange={(v) => setToggle("reduceMotion", v)} label={t("reduceMotion")} />
-          </Row>
-          <Row label={t("enterToSend")} icon={<RiCornerDownLeftLine className="size-5 text-muted" />}>
-            <Toggle on={toggles.enterToSend} onChange={(v) => setToggle("enterToSend", v)} label={t("enterToSend")} />
-          </Row>
         </Section>
 
         {/* Notifications & privacy */}
@@ -115,6 +109,13 @@ export function Settings({ onBack }: { onBack: () => void }) {
               label={t("readReceipts")}
             />
           </Row>
+        </Section>
+
+        {/* Account privacy */}
+        <Section title={t("accountPrivacy")}>
+          <PrivacyRow label={t("whoAddsToGroup")} value={privacy.addToGroup} onChange={(v) => setPrivacy("addToGroup", v)} />
+          <PrivacyRow label={t("whoMessages")} value={privacy.message} onChange={(v) => setPrivacy("message", v)} />
+          <PrivacyRow label={t("whoSeesPosts")} value={privacy.posts} onChange={(v) => setPrivacy("posts", v)} />
         </Section>
 
         {/* Account */}
@@ -176,3 +177,53 @@ function Row({
   );
 }
 
+
+/** One privacy setting: a label with an expandable everyone/followers/selected/nobody picker. */
+function PrivacyRow({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: PrivacyLevel;
+  onChange: (v: PrivacyLevel) => void;
+}) {
+  const { t } = useSettings();
+  const [open, setOpen] = useState(false);
+  const options: { key: PrivacyLevel; label: string }[] = [
+    { key: "everyone", label: t("privEveryone") },
+    { key: "followers", label: t("privFollowers") },
+    { key: "selected", label: t("privSelected") },
+    { key: "nobody", label: t("privNobody") },
+  ];
+  const current = options.find((o) => o.key === value)?.label ?? "";
+
+  return (
+    <div className="rounded-xl">
+      <button onClick={() => setOpen((v) => !v)} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition hover:bg-surface-2">
+        <span className="min-w-0 flex-1 text-sm font-medium text-ink">{label}</span>
+        <span className="shrink-0 text-sm text-muted">{current}</span>
+        <RiArrowDownSLine className={cx("size-4 shrink-0 text-faint transition", open && "rotate-180")} />
+      </button>
+      {open && (
+        <div className="flex flex-wrap gap-2 px-3 pb-2">
+          {options.map((o) => (
+            <button
+              key={o.key}
+              onClick={() => {
+                onChange(o.key);
+                setOpen(false);
+              }}
+              className={cx(
+                "rounded-full px-3 py-1.5 text-xs font-medium transition",
+                value === o.key ? "bg-accent text-white" : "bg-surface-2 text-ink hover:bg-surface-3",
+              )}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

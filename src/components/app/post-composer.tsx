@@ -27,7 +27,7 @@ import { filesToDataUrls } from "@/utils/image";
 import { PollView } from "./poll-chart";
 
 const LIMIT = 500;
-const MAX_IMAGES = 4;
+const MAX_IMAGES = 6;
 const MAX_OPTIONS = 4;
 
 type Panel = "camera" | "poll" | "location" | "gif" | null;

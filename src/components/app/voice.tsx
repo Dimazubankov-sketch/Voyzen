@@ -48,6 +48,7 @@ export function useMediaRecorder(barsRef: MutableRefObject<(HTMLDivElement | nul
   const peaksRef = useRef<number[]>([]);
   const startedAtRef = useRef(0);
   const kindRef = useRef<RecordKind>("audio");
+  const facingRef = useRef<"user" | "environment">("user");
   /** Resolves once `onstop` has assembled the blob. */
   const settleRef = useRef<((r: RecordingResult | null) => void) | null>(null);
 
@@ -79,9 +80,10 @@ export function useMediaRecorder(barsRef: MutableRefObject<(HTMLDivElement | nul
       chunksRef.current = [];
 
       try {
+        facingRef.current = "user";
         const media = await navigator.mediaDevices.getUserMedia(
           kind === "video"
-            ? { video: { width: 480, height: 480, facingMode: "user" }, audio: true }
+            ? { video: { width: 480, height: 480, facingMode: facingRef.current }, audio: true }
             : { audio: true },
         );
         streamRef.current = media;
@@ -184,7 +186,33 @@ export function useMediaRecorder(barsRef: MutableRefObject<(HTMLDivElement | nul
     setError(null);
   }, [teardown]);
 
-  return { recording, seconds, error, stream, start, stop, cancel, setError };
+  /** Flip the video preview between the front and back cameras. */
+  const flipCamera = useCallback(async () => {
+    if (kindRef.current !== "video" || !streamRef.current) return;
+    const next = facingRef.current === "user" ? "environment" : "user";
+    try {
+      const media = await navigator.mediaDevices.getUserMedia({
+        video: { width: 480, height: 480, facingMode: next },
+        audio: false,
+      });
+      const newTrack = media.getVideoTracks()[0];
+      if (!newTrack) return;
+      const current = streamRef.current;
+      current.getVideoTracks().forEach((tr) => {
+        current.removeTrack(tr);
+        tr.stop();
+      });
+      current.addTrack(newTrack);
+      facingRef.current = next;
+      // Re-point the preview at the same stream so the <video> refreshes.
+      setStream(null);
+      setStream(current);
+    } catch {
+      /* second camera unavailable */
+    }
+  }, []);
+
+  return { recording, seconds, error, stream, start, stop, cancel, flipCamera, setError };
 }
 
 /** The live meter shown while recording. */

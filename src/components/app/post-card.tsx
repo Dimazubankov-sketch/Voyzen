@@ -72,6 +72,7 @@ export function PostCard({ post }: { post: Post }) {
   const [reposting, setReposting] = useState(false);
   const [editing, setEditing] = useState(false);
   const [viewer, setViewer] = useState<number | null>(null);
+  const [postView, setPostView] = useState<Post | null>(null);
   const [translation, setTranslation] = useState<{ text: string; showing: boolean } | null>(null);
   const [translating, setTranslating] = useState(false);
 
@@ -172,14 +173,28 @@ export function PostCard({ post }: { post: Post }) {
       )}
 
       {post.images && post.images.length > 0 && (
-        <div className={cx("grid gap-2 px-4 pb-3", post.images.length > 1 ? "grid-cols-2" : "grid-cols-1")}>
-          {post.images.map((src, i) => (
-            <button key={src} onClick={() => setViewer(i)} className="overflow-hidden rounded-xl">
+        post.images.length === 1 ? (
+          <div className="px-4 pb-3">
+            <button onClick={() => setViewer(0)} className="block w-full overflow-hidden rounded-xl">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={src} alt="" className="h-48 w-full object-cover transition hover:brightness-95" />
+              <img src={post.images[0]} alt="" className="h-64 w-full object-cover transition hover:brightness-95" />
             </button>
-          ))}
-        </div>
+          </div>
+        ) : (
+          // Two visible at a time; swipe left/right through the rest.
+          <div className="scroll-clean flex snap-x snap-mandatory gap-2 overflow-x-auto px-4 pb-3">
+            {post.images.map((src, i) => (
+              <button
+                key={`${src}-${i}`}
+                onClick={() => setViewer(i)}
+                className="w-[calc(50%-0.25rem)] shrink-0 snap-start overflow-hidden rounded-xl"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={src} alt="" className="h-56 w-full object-cover transition hover:brightness-95" />
+              </button>
+            ))}
+          </div>
+        )
       )}
 
       {post.poll && (
@@ -191,7 +206,11 @@ export function PostCard({ post }: { post: Post }) {
       {/* Quoted repost */}
       {post.repostOf && (
         <div className="px-4 pb-3">
-          <QuotedPost post={post.repostOf} onOpen={() => openPerson(post.repostOf!.author.handle)} />
+          <QuotedPost
+            post={post.repostOf}
+            onOpen={() => openPerson(post.repostOf!.author.handle)}
+            onOpenPost={() => setPostView(post.repostOf!)}
+          />
         </div>
       )}
 
@@ -230,6 +249,8 @@ export function PostCard({ post }: { post: Post }) {
       </div>
 
       {open && <CommentsScreen post={post} onClose={() => setOpen(false)} />}
+
+      {postView && <CommentsScreen post={postView} onClose={() => setPostView(null)} />}
 
       {reposting && <PostComposerDialog repostOf={post} onClose={() => setReposting(false)} />}
 
@@ -476,14 +497,22 @@ function MenuRow({ icon, label, onClick, danger }: { icon: React.ReactNode; labe
 }
 
 /** A quoted (embedded) post inside a repost. */
-function QuotedPost({ post, onOpen }: { post: Post; onOpen: () => void }) {
+function QuotedPost({ post, onOpen, onOpenPost }: { post: Post; onOpen: () => void; onOpenPost: () => void }) {
   return (
-    <div className="overflow-hidden rounded-2xl border border-line">
+    <button
+      onClick={onOpenPost}
+      className="block w-full overflow-hidden rounded-2xl border border-line text-left transition hover:bg-surface-2/40"
+    >
       <div className="flex items-center gap-2 px-3 pt-3">
         <Avatar src={post.author.avatar} name={post.author.name} size={24} />
-        <button onClick={onOpen} className="truncate text-sm font-semibold text-ink hover:underline">
+        <span
+          role="link"
+          tabIndex={0}
+          onClick={(e) => { e.stopPropagation(); onOpen(); }}
+          className="truncate text-sm font-semibold text-ink hover:underline"
+        >
           {post.author.name}
-        </button>
+        </span>
         {post.author.verified && <RiVerifiedBadgeFill className="size-3.5 text-accent" />}
         <span className="truncate text-xs text-muted">{emailFor(post.author.handle)}</span>
       </div>
@@ -492,7 +521,7 @@ function QuotedPost({ post, onOpen }: { post: Post; onOpen: () => void }) {
         // eslint-disable-next-line @next/next/no-img-element
         <img src={post.images[0]} alt="" className="h-40 w-full object-cover" />
       )}
-    </div>
+    </button>
   );
 }
 

@@ -6,12 +6,12 @@ import {
   RiBarChart2Line,
   RiCheckLine,
   RiCloseCircleLine,
-  RiMoneyDollarCircleLine,
+  RiHandCoinLine,
   RiPushpin2Line,
   RiSpam3Line,
   RiUploadCloud2Line,
   RiVerifiedBadgeFill,
-  RiVipCrown2Fill,
+  RiVipDiamondFill,
 } from "@remixicon/react";
 import { useAuth } from "@/lib/auth-context";
 import { useT } from "@/lib/settings-context";
@@ -31,7 +31,7 @@ export function Premium({ onBack }: { onBack: () => void }) {
     { icon: <RiUploadCloud2Line className="size-5" />, text: t("benefitFiles") },
     { icon: <RiVerifiedBadgeFill className="size-5" />, text: t("benefitBadge") },
     { icon: <RiSpam3Line className="size-5" />, text: t("benefitLessAds") },
-    { icon: <RiMoneyDollarCircleLine className="size-5" />, text: t("benefitRevenue") },
+    { icon: <RiHandCoinLine className="size-5" />, text: t("benefitRevenue") },
     { icon: <RiBarChart2Line className="size-5" />, text: t("benefitAnalytics") },
   ];
 
@@ -52,7 +52,7 @@ export function Premium({ onBack }: { onBack: () => void }) {
         {/* Hero */}
         <div className="flex flex-col items-center gap-2 rounded-3xl bg-gradient-to-br from-accent to-accent-strong px-6 py-8 text-center text-white">
           <span className="flex size-16 items-center justify-center rounded-2xl bg-white/15">
-            <RiVipCrown2Fill className="size-9" />
+            <RiVipDiamondFill className="size-9" />
           </span>
           <h2 className="text-2xl font-bold">{t("plusTitle")}</h2>
           <p className="max-w-xs text-sm text-white/80">{t("plusSub")}</p>

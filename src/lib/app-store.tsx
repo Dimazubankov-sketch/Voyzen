@@ -22,6 +22,7 @@ import {
 } from "./mock-data";
 import { useAuth, type VoyzenUser } from "./auth-context";
 import { uid } from "@/utils/uid";
+import { idbGet, idbSet } from "@/utils/idb";
 
 /** What a new post can carry beyond its text. */
 export interface NewPostInput {
@@ -83,6 +84,7 @@ interface AppStore {
   markChatRead: (chatId: string) => void;
   markUnread: (chatId: string) => void;
   createGroup: (name: string, members: Person[]) => Chat;
+  openOrCreateDirect: (person: Person) => string;
 
   chatSettings: (chatId: string) => ChatSettings;
   setChatSetting: <K extends keyof ChatSettings>(chatId: string, key: K, value: ChatSettings[K]) => void;
@@ -92,6 +94,7 @@ interface AppStore {
   toggleMuteChat: (chatId: string) => void;
   deleteChat: (chatId: string) => void;
   pinMessage: (chatId: string, messageId: string | undefined) => void;
+  reorderChats: (orderedIds: string[]) => void;
 }
 
 const StoreContext = createContext<AppStore | null>(null);
@@ -130,13 +133,6 @@ function loadState(handle: string | null): PersistedState | null {
   }
 }
 
-function saveState(handle: string, state: PersistedState) {
-  try {
-    window.localStorage.setItem(storeKey(handle), JSON.stringify(state));
-  } catch {
-    /* ignore quota / unavailable storage */
-  }
-}
 
 export function AppStoreProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
@@ -158,21 +154,45 @@ function StoreInner({
   user: VoyzenUser | null;
   children: ReactNode;
 }) {
-  // `handle` is fixed for this mount, so this reads storage exactly once.
-  const saved = useMemo(() => loadState(handle), [handle]);
-  const [posts, setPosts] = useState<Post[]>(() => saved?.posts ?? POSTS);
-  const [chats, setChats] = useState<Chat[]>(() => saved?.chats ?? CHATS);
-  const [followed, setFollowed] = useState<Set<string>>(
-    () => new Set(saved?.followed ?? INITIAL_FOLLOWED),
-  );
-  const [settings, setSettings] = useState<Record<string, ChatSettings>>(() => saved?.settings ?? {});
-  const [blocked, setBlocked] = useState<Record<string, boolean>>(() => saved?.blocked ?? {});
+  const [posts, setPosts] = useState<Post[]>(POSTS);
+  const [chats, setChats] = useState<Chat[]>(CHATS);
+  const [followed, setFollowed] = useState<Set<string>>(() => new Set(INITIAL_FOLLOWED));
+  const [settings, setSettings] = useState<Record<string, ChatSettings>>({});
+  const [blocked, setBlocked] = useState<Record<string, boolean>>({});
+  // Persisted state loads asynchronously from IndexedDB; hold rendering until
+  // it's in so a returning account never flashes the demo data.
+  const [hydrated, setHydrated] = useState(!handle);
 
-  // Persist this account's world whenever it changes.
   useEffect(() => {
-    if (!handle) return;
-    saveState(handle, { posts, chats, followed: [...followed], settings, blocked });
-  }, [handle, posts, chats, followed, settings, blocked]);
+    if (!handle) {
+      setHydrated(true);
+      return;
+    }
+    let alive = true;
+    (async () => {
+      // Prefer IndexedDB; fall back to (and migrate from) the old localStorage save.
+      let saved = await idbGet<PersistedState>(storeKey(handle));
+      if (!saved) saved = loadState(handle);
+      if (alive && saved) {
+        if (saved.posts) setPosts(saved.posts);
+        if (saved.chats) setChats(saved.chats);
+        setFollowed(new Set(saved.followed ?? INITIAL_FOLLOWED));
+        setSettings(saved.settings ?? {});
+        setBlocked(saved.blocked ?? {});
+      }
+      if (alive) setHydrated(true);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [handle]);
+
+  // Persist this account's world whenever it changes (never before it hydrates,
+  // or the defaults would clobber the saved data).
+  useEffect(() => {
+    if (!handle || !hydrated) return;
+    void idbSet(storeKey(handle), { posts, chats, followed: [...followed], settings, blocked });
+  }, [handle, hydrated, posts, chats, followed, settings, blocked]);
 
   // Sweep out expired disappearing messages once a second.
   useEffect(() => {
@@ -474,6 +494,23 @@ function StoreInner({
     setChats((prev) => prev.map((c) => (c.id === chatId ? { ...c, unread: Math.max(1, c.unread) } : c)));
   }, []);
 
+  // Find the direct chat with a person (restoring it if it was deleted), or
+  // create a fresh one. Returns its id so the caller can open it.
+  const openOrCreateDirect = useCallback(
+    (person: Person): string => {
+      const existing = chats.find((c) => c.kind === "direct" && c.person?.handle === person.handle);
+      if (existing) {
+        if (existing.deleted) setChats((prev) => prev.map((c) => (c.id === existing.id ? { ...c, deleted: false } : c)));
+        return existing.id;
+      }
+      const id = uid("c");
+      const chat: Chat = { id, kind: "direct", person, unread: 0, messages: [] };
+      setChats((prev) => [chat, ...prev]);
+      return id;
+    },
+    [chats],
+  );
+
   const createGroup = useCallback((name: string, members: Person[]) => {
     const chat: Chat = {
       id: uid("g"),
@@ -538,6 +575,24 @@ function StoreInner({
     setChats((prev) => prev.map((c) => (c.id === chatId ? { ...c, pinnedMessageId: messageId } : c)));
   }, []);
 
+  // Reorder the chat list to match a drag result. Ids not in the list (deleted
+  // chats) keep their original relative position at the end.
+  const reorderChats = useCallback((orderedIds: string[]) => {
+    setChats((prev) => {
+      const byId = new Map(prev.map((c) => [c.id, c]));
+      const next: Chat[] = [];
+      for (const id of orderedIds) {
+        const c = byId.get(id);
+        if (c) {
+          next.push(c);
+          byId.delete(id);
+        }
+      }
+      for (const c of prev) if (byId.has(c.id)) next.push(c);
+      return next;
+    });
+  }, []);
+
   const visiblePosts = useMemo(() => posts.filter((p) => !p.hidden), [posts]);
   const likedPosts = useMemo(() => visiblePosts.filter((p) => p.liked), [visiblePosts]);
   const myPosts = useMemo(() => visiblePosts.filter((p) => p.mine), [visiblePosts]);
@@ -577,6 +632,7 @@ function StoreInner({
       markChatRead,
       markUnread,
       createGroup,
+      openOrCreateDirect,
       chatSettings,
       setChatSetting,
       isBlocked,
@@ -585,6 +641,7 @@ function StoreInner({
       toggleMuteChat,
       deleteChat,
       pinMessage,
+      reorderChats,
     }),
     [
       visiblePosts,
@@ -613,6 +670,7 @@ function StoreInner({
       markChatRead,
       markUnread,
       createGroup,
+      openOrCreateDirect,
       chatSettings,
       setChatSetting,
       isBlocked,
@@ -621,8 +679,13 @@ function StoreInner({
       toggleMuteChat,
       deleteChat,
       pinMessage,
+      reorderChats,
     ],
   );
+
+  // Wait for the account's data before rendering, so photos and chats never
+  // flash the demo defaults on a returning session.
+  if (handle && !hydrated) return null;
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
 }

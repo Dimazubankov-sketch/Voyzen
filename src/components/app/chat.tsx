@@ -5,6 +5,7 @@ import {
   RiAddLine,
   RiArrowLeftLine,
   RiArrowUpLine,
+  RiCameraSwitchLine,
   RiCheckDoubleLine,
   RiCheckLine,
   RiCloseLine,
@@ -27,7 +28,7 @@ import {
 import { Avatar } from "@/components/ui/avatar";
 import { MediaViewer } from "@/components/ui/media-viewer";
 import { useStore } from "@/lib/app-store";
-import { useIsDesktop, useSettings, useT } from "@/lib/settings-context";
+import { useIsDesktop, useT } from "@/lib/settings-context";
 import {
   chatAvatar,
   chatOnline,
@@ -73,56 +74,95 @@ export function ChatAvatar({ chat, size = 52 }: { chat: Chat; size?: number }) {
   );
 }
 
-/** A single chat-list row. Long-press or right-click opens its context menu. */
+/**
+ * A single chat-list row. A quick tap opens the chat. Press and hold to pick it
+ * up: drag up/down to reorder, or release without moving to open the context
+ * menu (pin / mute / delete). Right-click opens that menu directly.
+ */
 function ChatRow({
   chat,
   preview,
   lastTime,
   mine,
   active,
+  dragging,
   onOpen,
   onMenu,
+  onArm,
+  onDragMove,
+  onDragEnd,
 }: {
   chat: Chat;
   preview: string;
   lastTime?: string;
   mine: boolean;
   active: boolean;
+  dragging: boolean;
   onOpen: () => void;
   onMenu: (rect: DOMRect) => void;
+  onArm: (id: string) => void;
+  onDragMove: (id: string, clientY: number) => void;
+  onDragEnd: () => void;
 }) {
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const held = useRef(false);
+  const g = useRef({ armed: false, dragging: false, startY: 0 });
   useEffect(() => () => { if (holdTimer.current) clearTimeout(holdTimer.current); }, []);
 
-  const onPointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
-    held.current = false;
-    const rect = e.currentTarget.getBoundingClientRect();
+  const reset = () => { g.current = { armed: false, dragging: false, startY: 0 }; };
+
+  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.button === 2) return; // right-click → contextmenu
+    if ((e.target as HTMLElement).closest("button")) return;
+    g.current = { armed: false, dragging: false, startY: e.clientY };
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      /* no active pointer (synthetic events) */
+    }
     holdTimer.current = setTimeout(() => {
-      held.current = true;
-      onMenu(rect);
-    }, 450);
+      g.current.armed = true;
+      onArm(chat.id);
+    }, 320);
   };
-  const clearHold = () => {
+  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!g.current.armed) return;
+    if (!g.current.dragging && Math.abs(e.clientY - g.current.startY) > 6) g.current.dragging = true;
+    if (g.current.dragging) onDragMove(chat.id, e.clientY);
+  };
+  const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
     if (holdTimer.current) clearTimeout(holdTimer.current);
+    const st = g.current;
+    reset();
+    if (st.dragging) onDragEnd();
+    else if (st.armed) onMenu(e.currentTarget.getBoundingClientRect());
+    else onOpen();
+  };
+  const onPointerCancel = () => {
+    if (holdTimer.current) clearTimeout(holdTimer.current);
+    if (g.current.dragging) onDragEnd();
+    reset();
   };
 
   return (
-    <button
-      onClick={() => {
-        if (held.current) return;
-        onOpen();
-      }}
+    <div
+      data-chat={chat.id}
+      role="button"
+      tabIndex={0}
       onPointerDown={onPointerDown}
-      onPointerUp={clearHold}
-      onPointerLeave={clearHold}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerCancel}
       onContextMenu={(e) => {
         e.preventDefault();
         onMenu(e.currentTarget.getBoundingClientRect());
       }}
+      style={{ touchAction: dragging ? "none" : "pan-y" }}
       className={cx(
-        "flex w-full items-center gap-3 border-b border-line px-4 py-3 text-left transition hover:bg-surface-2/50",
+        "flex w-full select-none items-center gap-3 border-b border-line px-4 py-3 text-left",
         active && "bg-surface-2",
+        dragging
+          ? "relative z-10 scale-[1.02] rounded-xl border-transparent bg-surface shadow-float"
+          : "cursor-pointer transition hover:bg-surface-2/50",
       )}
     >
       <ChatAvatar chat={chat} />
@@ -150,7 +190,7 @@ function ChatRow({
           )}
         </div>
       </div>
-    </button>
+    </div>
   );
 }
 
@@ -158,18 +198,31 @@ export function ChatView({
   onConversationChange,
   onStartCall,
   onOpenPerson,
+  openChat,
 }: {
   onConversationChange?: (open: boolean) => void;
   onStartCall?: (name: string, avatar: string | undefined, kind: CallKind) => void;
   onOpenPerson?: (person: Person) => void;
+  /** External request to open a specific chat (e.g. from a profile's Message). */
+  openChat?: { id: string; n: number } | null;
 }) {
   const t = useT();
   const isDesktop = useIsDesktop();
-  const { chats, appendMessage, createGroup, markChatRead, chatSettings, togglePinChat, toggleMuteChat, deleteChat, markUnread } = useStore();
+  const { chats, appendMessage, createGroup, markChatRead, chatSettings, togglePinChat, toggleMuteChat, deleteChat, markUnread, reorderChats } = useStore();
   const [activeId, setActiveId] = useState<string | null>(null);
+
+  // Open a chat requested from elsewhere (the `n` counter re-fires on repeats).
+  useEffect(() => {
+    if (openChat) setActiveId(openChat.id);
+  }, [openChat]);
   const [query, setQuery] = useState("");
   const [newGroup, setNewGroup] = useState(false);
   const [chatMenu, setChatMenu] = useState<{ chat: Chat; rect: DOMRect } | null>(null);
+  const [order, setOrder] = useState<string[]>([]);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const orderRef = useRef<string[]>([]);
+  orderRef.current = order;
 
   const active = chats.find((c) => c.id === activeId) ?? null;
 
@@ -190,6 +243,37 @@ export function ChatView({
         c.messages.at(-1)?.text?.toLowerCase().includes(q),
     );
   }, [chats, query]);
+
+  const chatById = useMemo(() => new Map(filtered.map((c) => [c.id, c])), [filtered]);
+
+  // Keep the local drag order in step with the list, except mid-drag.
+  useEffect(() => {
+    if (!draggingId) setOrder(filtered.map((c) => c.id));
+  }, [filtered, draggingId]);
+
+  // Drag-to-reorder: pick up a row, then slide it to a new slot.
+  const onDragArm = (id: string) => setDraggingId(id);
+  const onDragMove = (id: string, clientY: number) => {
+    const listEl = listRef.current;
+    if (!listEl) return;
+    const rows = [...listEl.querySelectorAll<HTMLElement>("[data-chat]")];
+    let target = 0;
+    for (const el of rows) {
+      if (el.dataset.chat === id) continue;
+      const r = el.getBoundingClientRect();
+      if (clientY > r.top + r.height / 2) target++;
+    }
+    setOrder((prev) => {
+      const without = prev.filter((x) => x !== id);
+      without.splice(target, 0, id);
+      if (without.length === prev.length && without.every((x, i) => x === prev[i])) return prev;
+      return without;
+    });
+  };
+  const onDragEnd = () => {
+    if (draggingId) reorderChats(orderRef.current);
+    setDraggingId(null);
+  };
 
   const send = (partial: Omit<ChatMessage, "id" | "from" | "time">) => {
     if (!active) return;
@@ -235,8 +319,10 @@ export function ChatView({
           </div>
         </div>
 
-        <div className="scroll-clean min-h-0 flex-1 overflow-y-auto">
-          {filtered.map((chat) => {
+        <div ref={listRef} className="scroll-clean min-h-0 flex-1 overflow-y-auto">
+          {order.map((id) => {
+            const chat = chatById.get(id);
+            if (!chat) return null;
             const last = chat.messages.at(-1);
             const preview =
               last?.text ||
@@ -258,8 +344,12 @@ export function ChatView({
                 lastTime={last?.time}
                 mine={mine}
                 active={isDesktop && activeId === chat.id}
+                dragging={draggingId === chat.id}
                 onOpen={() => setActiveId(chat.id)}
                 onMenu={(rect) => setChatMenu({ chat, rect })}
+                onArm={onDragArm}
+                onDragMove={onDragMove}
+                onDragEnd={onDragEnd}
               />
             );
           })}
@@ -758,10 +848,8 @@ function Composer({
   onRecorded: (result: RecordingResult) => void;
 }) {
   const t = useT();
-  const { toggles } = useSettings();
-  const enterToSend = toggles.enterToSend;
   const barsRef = useRef<(HTMLDivElement | null)[]>([]);
-  const { recording, seconds, error, stream, start, stop, cancel, setError } = useMediaRecorder(barsRef);
+  const { recording, seconds, error, stream, start, stop, cancel, flipCamera, setError } = useMediaRecorder(barsRef);
 
   const [mode, setMode] = useState<RecordKind>("audio");
   const [locked, setLocked] = useState(false);
@@ -835,7 +923,16 @@ function Composer({
     return (
       <div className="flex flex-col gap-2">
         {mode === "video" && (
-          <div className="flex justify-center">
+          // Round preview on the right, with a camera-flip button on the left.
+          <div className="flex items-end justify-between">
+            <button
+              type="button"
+              onClick={() => void flipCamera()}
+              aria-label={t("switchCamera")}
+              className="flex size-11 items-center justify-center rounded-full bg-surface-2 text-ink transition hover:bg-surface-3 active:scale-95"
+            >
+              <RiCameraSwitchLine className="size-5" />
+            </button>
             <video ref={videoRef} autoPlay muted playsInline className="size-32 scale-x-[-1] rounded-full object-cover ring-2 ring-accent" />
           </div>
         )}
@@ -876,7 +973,7 @@ function Composer({
         value={draft}
         onChange={(e) => onDraft(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === "Enter" && !e.shiftKey && enterToSend) {
+          if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();
             onSubmit();
           }
